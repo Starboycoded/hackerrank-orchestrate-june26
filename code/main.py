@@ -18,7 +18,7 @@ def main():
     p.add_argument("--limit", type=int, default=0, help="Process only first N claims")
     p.add_argument("--claims", type=str, help="Path to claims CSV")
     p.add_argument("--history", type=str, default="dataset/user_history.csv")
-    p.add_argument("--images", type=str, default=".", help="Base dir for image paths")
+    p.add_argument("--images", type=str, default="dataset", help="Base dir for image paths (use . for repo root)")
     p.add_argument("--output", type=str, default="output.csv")
     p.add_argument("--provider", type=str, choices=["anthropic","openai","google"])
     args = p.parse_args()

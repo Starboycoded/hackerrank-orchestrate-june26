@@ -86,7 +86,6 @@ def fallback_result(claim_row, reason):
 
 
 def process_claim(claim_row, user_history, image_base_dir, dry_run=False):
-    provider = model_config.get_provider()
     user_id = claim_row.get("user_id","")
     user_hist = user_history.get(user_id)
     user_message = build_user_message(claim_row, user_hist)
@@ -98,19 +97,26 @@ def process_claim(claim_row, user_history, image_base_dir, dry_run=False):
         if not full.exists(): full = Path(rel)
         if full.exists(): resolved_paths.append(str(full))
 
-    if not resolved_paths:
-        return fallback_result(claim_row,"No image files could be loaded."),{"input_tokens":0,"output_tokens":0}
-
+    # Dry-run: inspect without API calls (before image check so we can debug paths)
     if dry_run:
-        est_image_tokens = len(resolved_paths)*1600
+        est_image_tokens = len(resolved_paths)*1600 if resolved_paths else 0
         est_text_tokens = len(user_message.split())*1.3
         est_total = int(est_image_tokens+est_text_tokens+1000)
         est_cost = (est_total/1000000)*3.0
         print(f"\n    DRY RUN user={user_id}")
-        print(f"    Images: {len(resolved_paths)} ({', '.join(Path(p).name for p in resolved_paths)})")
+        if resolved_paths:
+            print(f"    Images: {len(resolved_paths)} ({', '.join(Path(p).name for p in resolved_paths)})")
+        else:
+            print(f"    Images: 0 (no images found - check --images path)")
         print(f"    Est. tokens: ~{est_total} | Est. cost: ${est_cost:.4f}")
+        user_hist_dict = user_hist if isinstance(user_hist, dict) else {}
+        print(f"    User history: {user_hist_dict.get('past_claim_count', '?')} past claims | flags: {user_hist_dict.get('history_flags', 'none')}")
         return fallback_result(claim_row,"DRY_RUN"),{"input_tokens":est_total,"output_tokens":0}
 
+    if not resolved_paths:
+        return fallback_result(claim_row,"No image files could be loaded."),{"input_tokens":0,"output_tokens":0}
+
+    provider = model_config.get_provider()
     for attempt in range(model_config.max_retries):
         try:
             if provider=="anthropic":
@@ -119,10 +125,13 @@ def process_claim(claim_row, user_history, image_base_dir, dry_run=False):
             elif provider=="openai":
                 result = call_openai(SYSTEM_PROMPT,user_message,resolved_paths,
                     model_config.openai_api_key,model_config.openai_model)
-            else: raise ValueError(f"Unsupported: {provider}")
+            else:
+                raise ValueError(f"Unknown provider: {provider}")
+
             parsed = parse_json_response(result["content"])
             if parsed:
-                output = {"user_id":user_id,"image_paths":image_paths_raw,
+                output = {
+                    "user_id":user_id,"image_paths":claim_row.get("image_paths",""),
                     "user_claim":claim_row.get("user_claim",""),"claim_object":claim_row.get("claim_object",""),
                     "evidence_standard_met":str(parsed.get("evidence_standard_met","false")).lower(),
                     "evidence_standard_met_reason":str(parsed.get("evidence_standard_met_reason",""))[:150],
@@ -142,7 +151,6 @@ def process_claim(claim_row, user_history, image_base_dir, dry_run=False):
             if attempt<model_config.max_retries-1: time.sleep(model_config.retry_delay*(attempt+1))
 
     return fallback_result(claim_row,f"Failed after {model_config.max_retries} attempts"),{"input_tokens":0,"output_tokens":0}
-
 
 def run_pipeline(claims_csv, user_history_csv, image_base_dir, output_csv, dry_run=False, limit=0):
     claims_df = pd.read_csv(claims_csv)
