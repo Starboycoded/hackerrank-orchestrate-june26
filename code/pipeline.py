@@ -24,6 +24,18 @@ def encode_image(image_path: str) -> str:
 
 
 def get_image_mime(path: str) -> str:
+    """Detect MIME type from file header bytes, not extension (many .jpg files are actually WebP/PNG)."""
+    with open(path, "rb") as f:
+        header = f.read(12)
+    if header[:4] == b'RIFF' and header[8:12] == b'WEBP':
+        return "image/webp"
+    if header[:2] == b'\xff\xd8':
+        return "image/jpeg"
+    if header[:4] == b'\x89PNG':
+        return "image/png"
+    if header[:6] in (b'GIF87a', b'GIF89a'):
+        return "image/gif"
+    # Fallback to extension
     ext = Path(path).suffix.lower()
     return {".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".gif":"image/gif",".webp":"image/webp"}.get(ext,"image/jpeg")
 
