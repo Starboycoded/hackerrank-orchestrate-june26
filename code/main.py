@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Multi-Modal Evidence Review - Entry Point.
-Usage: python main.py [--sample] [--dry-run] [--limit N] [--provider anthropic|openai|google]
-Requires: export ANTHROPIC_API_KEY="sk-ant-..." ; pip install anthropic Pillow pandas python-dotenv"""
+Usage: python code/main.py [--sample] [--dry-run] [--limit N] [--provider anthropic|openai|google]
+Requires: set ANTHROPIC_API_KEY=sk-ant-... ; pip install anthropic Pillow pandas python-dotenv"""
 import argparse, sys
+from pathlib import Path
+
+# Ensure code/ directory is on the import path (works from repo root or code/)
+sys.path.insert(0, str(Path(__file__).parent))
+
 from config import model_config
 from pipeline import run_pipeline
 
